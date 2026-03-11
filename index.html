@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>Chat</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+
+body{
+margin:0;
+font-family:sans-serif;
+background:#fafafa;
+height:100vh;
+}
+
+#login{
+display:flex;
+height:100vh;
+justify-content:center;
+align-items:center;
+flex-direction:column;
+gap:10px;
+}
+
+#app{
+display:none;
+height:100vh;
+}
+
+.container{
+display:flex;
+height:100%;
+}
+
+.sidebar{
+width:230px;
+background:white;
+border-right:1px solid #ddd;
+overflow:auto;
+}
+
+.room{
+padding:12px;
+border-bottom:1px solid #eee;
+cursor:pointer;
+}
+
+.room:hover{
+background:#f3f3f3;
+}
+
+#chat{
+flex:1;
+display:flex;
+flex-direction:column;
+}
+
+header{
+padding:10px;
+border-bottom:1px solid #ddd;
+background:white;
+display:flex;
+justify-content:space-between;
+}
+
+#messages{
+flex:1;
+overflow:auto;
+padding:10px;
+}
+
+.msg{
+background:white;
+padding:10px;
+border-radius:12px;
+margin:6px;
+max-width:70%;
+box-shadow:0 1px 3px rgba(0,0,0,0.1);
+}
+
+.meta{
+font-size:11px;
+color:gray;
+margin-top:3px;
+}
+
+.input{
+display:flex;
+padding:10px;
+background:white;
+border-top:1px solid #ddd;
+gap:5px;
+}
+
+input{
+padding:10px;
+border-radius:20px;
+border:1px solid #ccc;
+}
+
+button{
+padding:10px;
+border:none;
+background:#0095f6;
+color:white;
+border-radius:20px;
+cursor:pointer;
+}
+
+.note{
+background:#eee;
+padding:6px;
+border-radius:10px;
+margin:4px;
+font-size:13px;
+}
+
+.reaction{
+font-size:12px;
+margin-right:5px;
+}
+
+@media (max-width:700px){
+
+.sidebar{
+width:160px;
+}
+
+.msg{
+max-width:90%;
+}
+
+}
+
+</style>
+</head>
+
+<body>
+
+<div id="login">
+
+<h2>Chat</h2>
+
+<input id="username" placeholder="ユーザー名">
+
+<button onclick="login()">参加</button>
+
+</div>
+
+
+<div id="app">
+
+<div class="container">
+
+<div class="sidebar">
+
+<input id="search" placeholder="DM検索">
+
+<button onclick="createRoom()">＋部屋</button>
+
+<div id="rooms"></div>
+
+</div>
+
+<div id="chat">
+
+<header>
+
+<div id="roomTitle">部屋なし</div>
+
+<div id="online">0 online</div>
+
+</header>
+
+<div id="notes"></div>
+
+<div id="messages"></div>
+
+<div class="input">
+
+<input id="message" placeholder="メッセージ">
+
+<input type="file" id="file">
+
+<button onclick="send()">送信</button>
+
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+
+<script>
+
+const SUPABASE_URL="https://jepqydjahhdjjpkrfrom.supabase.co"
+const SUPABASE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImplcHF5ZGphaGhkampwa3Jmcm9tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMyMjY0MzksImV4cCI6MjA4ODgwMjQzOX0.86APL-57hcGUUgcT0MaWgirUlY2Nc2X8ahsUAvAVrIM"
+
+const client=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
+
+let username=""
+let room=null
+
+function login(){
+
+username=document.getElementById("username").value
+
+document.getElementById("login").style.display="none"
+document.getElementById("app").style.display="block"
+
+Notification.requestPermission()
+
+loadRooms()
+loadNotes()
+updateOnline()
+
+}
+
+async function createRoom(){
+
+const name=prompt("部屋名")
+
+if(!name)return
+
+await client.from("rooms").insert({name})
+
+loadRooms()
+
+}
+
+async function loadRooms(){
+
+const {data}=await client.from("rooms").select("*")
+
+const box=document.getElementById("rooms")
+box.innerHTML=""
+
+data.forEach(r=>{
+
+const div=document.createElement("div")
+
+div.className="room"
+div.innerText=r.name
+
+div.onclick=()=>{
+
+room=r.id
+document.getElementById("roomTitle").innerText=r.name
+loadMessages()
+
+}
+
+box.appendChild(div)
+
+})
+
+}
+
+async function send(){
+
+if(!room)return
+
+const text=document.getElementById("message").value
+
+await client.from("messages").insert({
+
+room_id:room,
+username:username,
+text:text
+
+})
+
+document.getElementById("message").value=""
+
+}
+
+async function loadMessages(){
+
+const {data}=await client
+.from("messages")
+.select("*")
+.eq("room_id",room)
+.order("created_at")
+
+const box=document.getElementById("messages")
+box.innerHTML=""
+
+data.forEach(m=>renderMessage(m))
+
+}
+
+function renderMessage(m){
+
+const div=document.createElement("div")
+
+div.className="msg"
+
+let html="<b>"+m.username+"</b><br>"+(m.text||"")
+
+html+="<div class='meta'>"+new Date(m.created_at).toLocaleTimeString()+"</div>"
+
+div.innerHTML=html
+
+div.onclick=async()=>{
+
+const action=prompt("edit / delete / react / reply")
+
+if(action==="delete"){
+
+await client.from("messages").delete().eq("id",m.id)
+div.remove()
+
+}
+
+if(action==="edit"){
+
+const t=prompt("編集",m.text)
+
+await client.from("messages").update({text:t,edited:true}).eq("id",m.id)
+
+div.innerHTML="<b>"+m.username+"</b><br>"+t+"<div class='meta'>edited</div>"
+
+}
+
+if(action==="react"){
+
+alert("👍 ❤️ 😂 などをリアクションとして実装可能")
+
+}
+
+if(action==="reply"){
+
+document.getElementById("message").value="@"+m.username+" "
+
+}
+
+}
+
+document.getElementById("messages").appendChild(div)
+
+}
+
+async function loadNotes(){
+
+const {data}=await client.from("notes").select("*").order("created_at")
+
+const box=document.getElementById("notes")
+
+data.forEach(n=>{
+
+const div=document.createElement("div")
+div.className="note"
+
+div.innerText=n.username+" : "+n.text
+
+box.appendChild(div)
+
+})
+
+}
+
+async function updateOnline(){
+
+const {data}=await client.from("users").select("*")
+
+document.getElementById("online").innerText=data.length+" online"
+
+}
+
+client
+.channel("messages")
+.on(
+"postgres_changes",
+{event:"INSERT",schema:"public",table:"messages"},
+payload=>{
+
+if(payload.new.room_id===room){
+
+renderMessage(payload.new)
+
+if(Notification.permission==="granted"){
+
+new Notification(payload.new.username+"から新着")
+
+}
+
+}
+
+}
+)
+.subscribe()
+
+</script>
+
+</body>
+</html>

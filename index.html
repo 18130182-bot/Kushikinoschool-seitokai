@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
@@ -13,7 +14,7 @@
 body{
 margin:0;
 font-family:sans-serif;
-background:#fafafa;
+background:#f2f2f2;
 height:100vh;
 }
 
@@ -37,7 +38,7 @@ height:100%;
 }
 
 .sidebar{
-width:230px;
+width:240px;
 background:white;
 border-right:1px solid #ddd;
 overflow:auto;
@@ -50,7 +51,7 @@ cursor:pointer;
 }
 
 .room:hover{
-background:#f3f3f3;
+background:#f4f4f4;
 }
 
 #chat{
@@ -61,8 +62,8 @@ flex-direction:column;
 
 header{
 padding:10px;
-border-bottom:1px solid #ddd;
 background:white;
+border-bottom:1px solid #ddd;
 display:flex;
 justify-content:space-between;
 }
@@ -76,7 +77,7 @@ padding:10px;
 .msg{
 background:white;
 padding:10px;
-border-radius:12px;
+border-radius:10px;
 margin:6px;
 max-width:70%;
 box-shadow:0 1px 3px rgba(0,0,0,0.1);
@@ -85,14 +86,13 @@ box-shadow:0 1px 3px rgba(0,0,0,0.1);
 .meta{
 font-size:11px;
 color:gray;
-margin-top:3px;
 }
 
 .input{
 display:flex;
 padding:10px;
-background:white;
 border-top:1px solid #ddd;
+background:white;
 gap:5px;
 }
 
@@ -100,6 +100,7 @@ input{
 padding:10px;
 border-radius:20px;
 border:1px solid #ccc;
+flex:1;
 }
 
 button{
@@ -114,26 +115,9 @@ cursor:pointer;
 .note{
 background:#eee;
 padding:6px;
-border-radius:10px;
 margin:4px;
+border-radius:10px;
 font-size:13px;
-}
-
-.reaction{
-font-size:12px;
-margin-right:5px;
-}
-
-@media (max-width:700px){
-
-.sidebar{
-width:160px;
-}
-
-.msg{
-max-width:90%;
-}
-
 }
 
 </style>
@@ -150,7 +134,6 @@ max-width:90%;
 <button onclick="login()">参加</button>
 
 </div>
-
 
 <div id="app">
 
@@ -170,7 +153,7 @@ max-width:90%;
 
 <header>
 
-<div id="roomTitle">部屋なし</div>
+<div id="roomTitle">部屋を選択</div>
 
 <div id="online">0 online</div>
 
@@ -184,8 +167,6 @@ max-width:90%;
 
 <input id="message" placeholder="メッセージ">
 
-<input type="file" id="file">
-
 <button onclick="send()">送信</button>
 
 </div>
@@ -196,13 +177,13 @@ max-width:90%;
 
 </div>
 
-
 <script>
 
-const SUPABASE_URL="https://jepqydjahhdjjpkrfrom.supabase.co"
-const SUPABASE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImplcHF5ZGphaGhkampwa3Jmcm9tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMyMjY0MzksImV4cCI6MjA4ODgwMjQzOX0.86APL-57hcGUUgcT0MaWgirUlY2Nc2X8ahsUAvAVrIM"
+const SUPABASE_URL="ここにURL"
+const SUPABASE_KEY="ここにKEY"
 
-const client=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
+const {createClient}=supabase
+const db=createClient(SUPABASE_URL,SUPABASE_KEY)
 
 let username=""
 let room=null
@@ -211,14 +192,16 @@ function login(){
 
 username=document.getElementById("username").value
 
+if(!username){
+alert("ユーザー名を入力")
+return
+}
+
 document.getElementById("login").style.display="none"
 document.getElementById("app").style.display="block"
 
-Notification.requestPermission()
-
 loadRooms()
 loadNotes()
-updateOnline()
 
 }
 
@@ -226,9 +209,7 @@ async function createRoom(){
 
 const name=prompt("部屋名")
 
-if(!name)return
-
-await client.from("rooms").insert({name})
+await db.from("rooms").insert({name})
 
 loadRooms()
 
@@ -236,7 +217,7 @@ loadRooms()
 
 async function loadRooms(){
 
-const {data}=await client.from("rooms").select("*")
+const {data}=await db.from("rooms").select("*")
 
 const box=document.getElementById("rooms")
 box.innerHTML=""
@@ -244,16 +225,13 @@ box.innerHTML=""
 data.forEach(r=>{
 
 const div=document.createElement("div")
-
 div.className="room"
 div.innerText=r.name
 
 div.onclick=()=>{
-
 room=r.id
 document.getElementById("roomTitle").innerText=r.name
 loadMessages()
-
 }
 
 box.appendChild(div)
@@ -264,11 +242,14 @@ box.appendChild(div)
 
 async function send(){
 
-if(!room)return
+if(!room){
+alert("部屋を選択してください")
+return
+}
 
 const text=document.getElementById("message").value
 
-await client.from("messages").insert({
+await db.from("messages").insert({
 
 room_id:room,
 username:username,
@@ -278,11 +259,13 @@ text:text
 
 document.getElementById("message").value=""
 
+loadMessages()
+
 }
 
 async function loadMessages(){
 
-const {data}=await client
+const {data}=await db
 .from("messages")
 .select("*")
 .eq("room_id",room)
@@ -291,73 +274,14 @@ const {data}=await client
 const box=document.getElementById("messages")
 box.innerHTML=""
 
-data.forEach(m=>renderMessage(m))
-
-}
-
-function renderMessage(m){
+data.forEach(m=>{
 
 const div=document.createElement("div")
 
 div.className="msg"
 
-let html="<b>"+m.username+"</b><br>"+(m.text||"")
-
-html+="<div class='meta'>"+new Date(m.created_at).toLocaleTimeString()+"</div>"
-
-div.innerHTML=html
-
-div.onclick=async()=>{
-
-const action=prompt("edit / delete / react / reply")
-
-if(action==="delete"){
-
-await client.from("messages").delete().eq("id",m.id)
-div.remove()
-
-}
-
-if(action==="edit"){
-
-const t=prompt("編集",m.text)
-
-await client.from("messages").update({text:t,edited:true}).eq("id",m.id)
-
-div.innerHTML="<b>"+m.username+"</b><br>"+t+"<div class='meta'>edited</div>"
-
-}
-
-if(action==="react"){
-
-alert("👍 ❤️ 😂 などをリアクションとして実装可能")
-
-}
-
-if(action==="reply"){
-
-document.getElementById("message").value="@"+m.username+" "
-
-}
-
-}
-
-document.getElementById("messages").appendChild(div)
-
-}
-
-async function loadNotes(){
-
-const {data}=await client.from("notes").select("*").order("created_at")
-
-const box=document.getElementById("notes")
-
-data.forEach(n=>{
-
-const div=document.createElement("div")
-div.className="note"
-
-div.innerText=n.username+" : "+n.text
+div.innerHTML="<b>"+m.username+"</b><br>"+m.text+
+"<div class='meta'>"+new Date(m.created_at).toLocaleTimeString()+"</div>"
 
 box.appendChild(div)
 
@@ -365,36 +289,23 @@ box.appendChild(div)
 
 }
 
-async function updateOnline(){
+async function loadNotes(){
 
-const {data}=await client.from("users").select("*")
+const {data}=await db.from("notes").select("*")
 
-document.getElementById("online").innerText=data.length+" online"
+const box=document.getElementById("notes")
 
-}
+data.forEach(n=>{
 
-client
-.channel("messages")
-.on(
-"postgres_changes",
-{event:"INSERT",schema:"public",table:"messages"},
-payload=>{
+const div=document.createElement("div")
+div.className="note"
+div.innerText=n.username+" : "+n.text
 
-if(payload.new.room_id===room){
+box.appendChild(div)
 
-renderMessage(payload.new)
-
-if(Notification.permission==="granted"){
-
-new Notification(payload.new.username+"から新着")
+})
 
 }
-
-}
-
-}
-)
-.subscribe()
 
 </script>
 
